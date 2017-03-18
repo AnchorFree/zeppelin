@@ -1,32 +1,32 @@
 [
   {
-    "group": "jdbc",
+    "group": "impala",
     "name": "sql",
     "className": "org.apache.zeppelin.jdbc.JDBCInterpreter",
     "properties": {
       "default.url": {
         "envName": null,
-        "propertyName": "default.url",
-        "defaultValue": "jdbc:postgresql://localhost:5432/",
-        "description": "The URL for JDBC."
+        "propertyName": "hive.url",
+        "defaultValue": "jdbc:hive2://192.168.12.120:21050/;auth=noSasl",
+        "description": ""
       },
       "default.user": {
         "envName": null,
-        "propertyName": "default.user",
-        "defaultValue": "gpadmin",
-        "description": "The JDBC user name"
+        "propertyName": "hive.user",
+        "defaultValue": "hive",
+        "description": ""
       },
       "default.password": {
         "envName": null,
-        "propertyName": "default.password",
+        "propertyName": "hive.password",
         "defaultValue": "",
-        "description": "The JDBC user password"
+        "description": ""
       },
       "default.driver": {
         "envName": null,
-        "propertyName": "default.driver",
-        "defaultValue": "org.postgresql.Driver",
-        "description": "JDBC Driver Name"
+        "propertyName": "hive.driver",
+        "defaultValue": "org.apache.hive.jdbc.HiveDriver",
+        "description": ""
       },
       "common.max_count": {
         "envName": null,
