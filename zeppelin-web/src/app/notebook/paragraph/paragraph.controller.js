@@ -36,6 +36,7 @@ function ParagraphCtrl($scope, $rootScope, $route, $window, $routeParams, $locat
                        $timeout, $compile, $http, $q, websocketMsgSrv,
                        baseUrlSrv, ngToast, saveAsService, noteVarShareService) {
   var ANGULAR_FUNCTION_OBJECT_NAME_PREFIX = '_Z_ANGULAR_FUNC_';
+  $rootScope.keys = Object.keys;
   $scope.parentNote = null;
   $scope.paragraph = null;
   $scope.originalText = '';
@@ -123,12 +124,24 @@ function ParagraphCtrl($scope, $rootScope, $route, $window, $routeParams, $locat
   };
 
   var initializeDefault = function(config) {
+    var forms = $scope.paragraph.settings.forms;
+    
     if (!config.colWidth) {
       config.colWidth = 12;
     }
-
+  
     if (config.enabled === undefined) {
       config.enabled = true;
+    }
+  
+    for (var idx in forms) {
+      if (forms[idx]) {
+        if (forms[idx].options) {
+          if (config.runOnSelectionChange === undefined) {
+            config.runOnSelectionChange = true;
+          }
+        }
+      }
     }
 
     if (!config.results) {
@@ -255,6 +268,11 @@ function ParagraphCtrl($scope, $rootScope, $route, $window, $routeParams, $locat
     if (editorValue && !$scope.isRunning(paragraph)) {
       $scope.runParagraph(editorValue);
     }
+  };
+
+  $scope.turnOnAutoRun = function (paragraph) {
+    paragraph.config.runOnSelectionChange = !paragraph.config.runOnSelectionChange;
+    commitParagraph(paragraph);
   };
 
   $scope.moveUp = function(paragraph) {
@@ -417,7 +435,7 @@ function ParagraphCtrl($scope, $rootScope, $route, $window, $routeParams, $locat
     if ($scope.asIframe) {
       return 'col-md-12';
     } else {
-      return 'col-md-' + n;
+      return 'paragraph-col col-md-' + n;
     }
   };
 
@@ -536,6 +554,7 @@ function ParagraphCtrl($scope, $rootScope, $route, $window, $routeParams, $locat
 
       $scope.editor.on('blur', function() {
         handleFocus(false);
+        $scope.saveParagraph($scope.paragraph);
       });
 
       $scope.editor.on('paste', function(e) {
@@ -975,6 +994,7 @@ function ParagraphCtrl($scope, $rootScope, $route, $window, $routeParams, $locat
   $scope.$on('updateParagraph', function(event, data) {
     if (data.paragraph.id === $scope.paragraph.id &&
       (data.paragraph.dateCreated !== $scope.paragraph.dateCreated ||
+      data.paragraph.text !== $scope.paragraph.text ||
       data.paragraph.dateFinished !== $scope.paragraph.dateFinished ||
       data.paragraph.dateStarted !== $scope.paragraph.dateStarted ||
       data.paragraph.dateUpdated !== $scope.paragraph.dateUpdated ||

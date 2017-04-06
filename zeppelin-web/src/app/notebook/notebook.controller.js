@@ -141,11 +141,6 @@ function NotebookCtrl($scope, $route, $routeParams, $location, $rootScope,
 
   initNotebook();
 
-  // force notebook reload on user change
-  $scope.$on('setNoteMenu', function(event, note) {
-    initNotebook();
-  });
-
   $scope.focusParagraphOnClick = function(clickEvent) {
     if (!$scope.note) {
       return;
@@ -358,15 +353,14 @@ function NotebookCtrl($scope, $route, $routeParams, $location, $rootScope,
   };
 
   $scope.isNoteRunning = function() {
-    var running = false;
     if (!$scope.note) { return false; }
     for (var i = 0; i < $scope.note.paragraphs.length; i++) {
-      if ($scope.note.paragraphs[i].status === 'PENDING' || $scope.note.paragraphs[i].status === 'RUNNING') {
-        running = true;
-        break;
+      const status = $scope.note.paragraphs[i].status;
+      if (status === 'PENDING' || status === 'RUNNING') {
+        return true;
       }
     }
-    return running;
+    return false;
   };
 
   $scope.killSaveTimer = function() {

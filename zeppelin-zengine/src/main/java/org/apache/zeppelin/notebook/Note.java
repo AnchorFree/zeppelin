@@ -21,11 +21,7 @@ import static java.lang.String.format;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -137,6 +133,15 @@ public class Note implements Serializable, ParagraphJobListener {
       valueString = "false";
     }
     getConfig().put("personalizedMode", valueString);
+    clearUserParagraphs(value);
+  }
+
+  private void clearUserParagraphs(boolean isPersonalized) {
+    if (!isPersonalized) {
+      for (Paragraph p : paragraphs) {
+        p.clearUserParagraphs();
+      }
+    }
   }
 
   public String getId() {
@@ -308,8 +313,8 @@ public class Note implements Serializable, ParagraphJobListener {
         interpreterSettingManager);
 
     Map<String, Object> config = new HashMap<>(srcParagraph.getConfig());
-    Map<String, Object> param = new HashMap<>(srcParagraph.settings.getParams());
-    Map<String, Input> form = new HashMap<>(srcParagraph.settings.getForms());
+    Map<String, Object> param = srcParagraph.settings.getParams();
+    LinkedHashMap<String, Input> form = srcParagraph.settings.getForms();
 
     newParagraph.setConfig(config);
     newParagraph.settings.setParams(param);
@@ -386,15 +391,25 @@ public class Note implements Serializable, ParagraphJobListener {
    * Clear paragraph output by id.
    *
    * @param paragraphId ID of paragraph
+   * @param user not null if personalized mode is enabled
    * @return Paragraph
    */
-  public Paragraph clearParagraphOutput(String paragraphId) {
+  public Paragraph clearParagraphOutput(String paragraphId, String user) {
     synchronized (paragraphs) {
       for (Paragraph p : paragraphs) {
-        if (p.getId().equals(paragraphId)) {
-          p.setReturn(null, null);
-          return p;
+        if (!p.getId().equals(paragraphId)) {
+          continue;
         }
+
+        /** `broadcastParagraph` requires original paragraph */
+        Paragraph originParagraph = p;
+
+        if (user != null) {
+          p = p.getUserParagraphMap().get(user);
+        }
+
+        p.setReturn(null, null);
+        return originParagraph;
       }
     }
     return null;

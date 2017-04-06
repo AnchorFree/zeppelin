@@ -173,7 +173,8 @@ public class NotebookServer extends WebSocketServlet
       }
 
       String ticket = TicketContainer.instance.getTicket(messagereceived.principal);
-      if (ticket != null && !ticket.equals(messagereceived.ticket)) {
+      if (ticket != null &&
+          (messagereceived.ticket == null || !ticket.equals(messagereceived.ticket))) {
         /* not to pollute logs, log instead of exception */
         if (StringUtils.isEmpty(messagereceived.ticket)) {
           LOG.debug("{} message: invalid ticket {} != {}", messagereceived.op,
@@ -621,14 +622,13 @@ public class NotebookServer extends WebSocketServlet
 
   public void broadcastParagraph(Note note, Paragraph p) {
     if (note.isPersonalizedMode()) {
-      broadcastParagraphs(p.getUserParagraphMap(), p);
+      broadcastParagraphs(p.getUserParagraphMap());
     } else {
       broadcast(note.getId(), new Message(OP.PARAGRAPH).put("paragraph", p));
     }
   }
 
-  public void broadcastParagraphs(Map<String, Paragraph> userParagraphMap,
-      Paragraph defaultParagraph) {
+  public void broadcastParagraphs(Map<String, Paragraph> userParagraphMap) {
     if (null != userParagraphMap) {
       for (String user : userParagraphMap.keySet()) {
         multicastToUser(user,
@@ -1014,6 +1014,7 @@ public class NotebookServer extends WebSocketServlet
     if (note != null && !note.isTrash()){
       fromMessage.put("name", Folder.TRASH_FOLDER_ID + "/" + note.getName());
       renameNote(conn, userAndRoles, notebook, fromMessage, "move");
+      notebook.moveNoteToTrash(note.getId());
     }
   }
 
@@ -1127,12 +1128,23 @@ public class NotebookServer extends WebSocketServlet
     p.setConfig(config);
     p.setTitle((String) fromMessage.get("title"));
     p.setText((String) fromMessage.get("paragraph"));
+
+    subject = new AuthenticationInfo(fromMessage.principal);
+    if (note.isPersonalizedMode()) {
+      p = p.getUserParagraph(subject.getUser());
+      p.settings.setParams(params);
+      p.setConfig(config);
+      p.setTitle((String) fromMessage.get("title"));
+      p.setText((String) fromMessage.get("paragraph"));
+    }
+
+
     note.persist(subject);
 
     if (note.isPersonalizedMode()) {
       Map<String, Paragraph> userParagraphMap =
           note.getParagraph(paragraphId).getUserParagraphMap();
-      broadcastParagraphs(userParagraphMap, p);
+      broadcastParagraphs(userParagraphMap);
     } else {
       broadcastParagraph(note, p);
     }
@@ -1228,9 +1240,11 @@ public class NotebookServer extends WebSocketServlet
           notebookAuthorization.getWriters(noteId));
       return;
     }
-    note.clearParagraphOutput(paragraphId);
-    Paragraph paragraph = note.getParagraph(paragraphId);
-    broadcastParagraph(note, paragraph);
+
+    String user = (note.isPersonalizedMode()) ?
+            new AuthenticationInfo(fromMessage.principal).getUser() : null;
+    Paragraph p = note.clearParagraphOutput(paragraphId, user);
+    broadcastParagraph(note, p);
   }
 
   private void completion(NotebookSocket conn, HashSet<String> userAndRoles, Notebook notebook,
@@ -1647,6 +1661,15 @@ public class NotebookServer extends WebSocketServlet
     p.settings.setParams(params);
     p.setConfig(config);
 
+    if (note.isPersonalizedMode()) {
+      p = note.getParagraph(paragraphId);
+      p.setText(text);
+      p.setTitle(title);
+      p.setAuthenticationInfo(subject);
+      p.settings.setParams(params);
+      p.setConfig(config);
+    }
+
     return p;
   }
 
@@ -1767,7 +1790,15 @@ public class NotebookServer extends WebSocketServlet
       InterpreterResult.Type type, String output) {
     Message msg = new Message(OP.PARAGRAPH_UPDATE_OUTPUT).put("noteId", noteId)
         .put("paragraphId", paragraphId).put("index", index).put("type", type).put("data", output);
-    broadcast(noteId, msg);
+    Note note = notebook().getNote(noteId);
+    if (note.isPersonalizedMode()) {
+      String user = note.getParagraph(paragraphId).getUser();
+      if (null != user) {
+        multicastToUser(user, msg);
+      }
+    } else {
+      broadcast(noteId, msg);
+    }
   }
 
 
@@ -1778,7 +1809,7 @@ public class NotebookServer extends WebSocketServlet
   public void onOutputClear(String noteId, String paragraphId) {
     Notebook notebook = notebook();
     final Note note = notebook.getNote(noteId);
-    note.clearParagraphOutput(paragraphId);
+    note.clearParagraphOutput(paragraphId, null);
     Paragraph paragraph = note.getParagraph(paragraphId);
     broadcastParagraph(note, paragraph);
   }
@@ -2005,7 +2036,7 @@ public class NotebookServer extends WebSocketServlet
     @Override
     public void onProgressUpdate(Job job, int progress) {
       notebookServer.broadcast(note.getId(),
-          new Message(OP.PROGRESS).put("id", job.getId()).put("progress", job.progress()));
+          new Message(OP.PROGRESS).put("id", job.getId()).put("progress", progress));
     }
 
     @Override
@@ -2036,7 +2067,9 @@ public class NotebookServer extends WebSocketServlet
         }
       }
       if (job instanceof Paragraph) {
-        notebookServer.broadcastParagraph(note, (Paragraph) job);
+        Paragraph p = (Paragraph) job;
+        p.setStatusToUserParagraph(job.getStatus());
+        notebookServer.broadcastParagraph(note, p);
       }
       try {
         notebookServer.broadcastUpdateNoteJobInfo(System.currentTimeMillis() - 5000);
